@@ -1,0 +1,161 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+
+  MyEndpointServiceName:
+    Description: Service name for the endpoint
+    Type: String
+    Default: com.amazonaws.vpce.eu-west-1.vpce-svc-0f009d189f90ee059
+
+  MyVpcId:
+    Description: Vpc id
+    Type: String
+    Default: vpc-8aa607ef 
+
+  MySubnetId:
+    Description: Subnet id
+    Type: String
+    Default: subnet-3a3ce363
+
+  MySecurityGroupId:
+    Description: Security Group id
+    Type: String
+    Default: sg-612e5404
+
+Resources:
+
+  CustomLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyName: ManageVpcEndpoints
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:*VpcEndpoint*
+            Resource: '*'
+
+  EndpointFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt CustomLambdaRole.Arn
+      Code:
+        ZipFile: !Sub |
+          var response = require('cfn-response');
+          var AWS = require('aws-sdk');
+          exports.handler = function(event, context) {
+
+            console.log("Event:\n", JSON.stringify(event));
+            console.log("Context:\n", JSON.stringify(event));
+
+            if (event.RequestType == 'Delete') {
+              
+              // Stack is being deleted --> delete endpoint
+
+              // First determine the endpoint for the VPC
+              var ec2 = new AWS.EC2();
+              var vpcId = event.ResourceProperties.VpcId;
+              var params = {
+                Filters: [
+                  {
+                    Name: 'vpc-id',
+                    Values: [ event.ResourceProperties.VpcId ]
+                  }
+                ],
+              };
+              var endpointIdWeAreLookingFor = 'vpce-something';
+              ec2.describeVpcEndpoints(params, 
+                function(err, allEndpoints) {
+                  if (err) {
+                    console.log(err, err.stack);
+                    response.send(event, context, response.FAILED, {});
+                  } else {
+                    console.log("Endpoints:\n", allEndpoints);
+                    var mapOfEndpoints = allEndpoints.VpcEndpoints;
+                    for (var [key, value] of mapOfEndpoints.entries()) {
+
+                      // If ServiceName matches then we have found the right one
+                      if (value.ServiceName == event.ResourceProperties.ServiceName) {
+                        endpointIdWeAreLookingFor = value.VpcEndpointId;
+
+                        // Now we can actually delete that endpoint
+                        var params = { VpcEndpointIds: [ endpointIdWeAreLookingFor ] };
+                        ec2.deleteVpcEndpoints(params, function(err, data) {
+                          if (err) {
+                            console.log(err, err.stack);
+                            response.send(event, context, response.SUCCESS, {});
+                          }
+                          else {
+                            console.log("Successfully deleted endpoint\n");
+                            response.send(event, context, response.FAILED, {});
+                          }
+                        });
+
+                      }
+                    }
+                    console.log("No endpoint found, so no need to delete it");
+                    response.send(event, context, response.SUCCESS, {});
+                  }
+                }
+              );
+
+            } else {
+              // Assume that stack is being created --> create endpoint ('Update' case not supported)
+              var ec2 = new AWS.EC2();
+              var params = {
+                ServiceName: event.ResourceProperties.ServiceName,
+                VpcId: event.ResourceProperties.VpcId,
+                SecurityGroupIds: [
+                  event.ResourceProperties.SecurityGroupId
+                ],
+                SubnetIds: event.ResourceProperties.SubnetIds,
+                VpcEndpointType: 'Interface'
+              };
+              ec2.createVpcEndpoint(params, 
+                function(err, data) {
+                  if (err) {
+                    console.log(err, err.stack);
+                    response.send(event, context, response.FAILED, {});
+                  } else {
+                    console.log("Successfully created endpoint\n");
+                    var dnsName = data.VpcEndpoint.DnsEntries[0].DnsName;
+                    const out = {};
+                    out['dnsName'] = dnsName;
+                    console.log(out);
+                    response.send(event, context, response.SUCCESS, out);
+                }
+              });
+
+            }
+
+          };
+      Timeout: 300
+      Runtime: nodejs6.10
+
+  MyEndpoint:
+    Type: Custom::MyEndpoint
+    Properties:
+      ServiceToken: !GetAtt EndpointFunction.Arn
+      ServiceName: !Ref MyEndpointServiceName
+      SecurityGroupId: !Ref MySecurityGroupId
+      VpcId: !Ref MyVpcId
+      SubnetIds:
+      - !Ref MySubnetId
+
+Outputs:
+  DnsName: 
+    Value: !GetAtt MyEndpoint.dnsName
