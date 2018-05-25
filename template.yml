@@ -5,22 +5,18 @@ Parameters:
   MyEndpointServiceName:
     Description: Service name for the endpoint
     Type: String
-    Default: com.amazonaws.vpce.eu-west-1.vpce-svc-0f009d189f90ee059
 
   MyVpcId:
     Description: Vpc id
     Type: String
-    Default: vpc-8aa607ef 
 
   MySubnetId:
     Description: Subnet id
     Type: String
-    Default: subnet-3a3ce363
 
   MySecurityGroupId:
     Description: Security Group id
     Type: String
-    Default: sg-612e5404
 
 Resources:
 
