@@ -1,11 +1,11 @@
-AWS Lambda with Java and native c++ code
+<h1>AWS Lambda with Java and native c++ code</h1>
 
 Serverless computing platforms are growing and, in many aspects, AWS Lambda leads the pack. At this time it supports code written in Node.js (JavaScript), Python, Java (Java 8 compatible), C# (.NET Core 1 and 2) and Go. Furthermore, Amazon declares that your code can include existing libraries and even native ones (AWS Lambda FAQs).
 
 That is very important. Your company may have a big existing code base to capitalize on, and regardless, it’s plenty of software out there that you may want to reuse.
 
 Including a library written in the same language as your lambda function is pretty straightforward. It comes down to creating a valid deployment package (Creating a Deployment Package). Include a native c/c++ library can be a little trickier. It took me some time to figure out how to make it work, and that’s why I’ve decided to post this article. Hopefully it will ease your path and help you to smoothly deploy the core of your new serverless application.
-Prerequisites
+<h2>Prerequisites</h2>
 
 This post will cover a lot of different topics and I will not go into details. You are supposed to have at least basic knowledge of C++, Java, JNI, Maven, Docker, AWS IAM and Lambda.
 
@@ -14,7 +14,7 @@ You also need an AWS account and a pc with the Java JDK 1.8, Maven, Docker and A
 Of course there is a lot of collective wisdom in here. I can’t claim it all came from myself. There’s a lot of googling around and the whole Lambda part is based on the AWS example from AWS Labs.
 
 The following procedures have been tested on a Windows machine. You might need to adapt a few back-slashes to slashes here and there.
-Compile the C++ library
+<h2>Compile the C++ library</h2>
 
 The compilation of the C++ library could be the most laborious part. It must be compiled  against its target environment, where your lambda function will be deployed and run. From Amazon’s documentation we know that it’s the current Amazon Linux AMI distribution. That leaves us with 2 options:
 
@@ -49,7 +49,7 @@ public class JavaHello {
   public native String sayHello(String name);
 }
 
-Package the JAR artifact
+<h2>Package the JAR artifact</h2>
 
 This phase is the one that took me the longest, and eventually ended up being very easy. The  breakthrough was the discovery that the Jars archives get extracted before execution. It wasn’t obvious to me, I guess it must be to improve performance. In any case, that removes the obstacle of extracting the .so library to load it.
 
@@ -74,7 +74,7 @@ name = pippo
 
 {"message":"Hello pippo"}
 
-Deploy on AWS
+<h2>Deploy on AWS</h2>
 
 As said, SAM Local can also package and deploy to AWS. Locally, we already have everything. It’s now time to access our AWS account. I assume your environment is configured to access your AWS account from the AWS CLI. If not have a look at Configuring the AWS CLI.
 
